@@ -1,13 +1,23 @@
+"use client";
+
 import { Button } from "@/app/_components/ui/button";
 import { Card, CardContent } from "@/app/_components/ui/card";
 import { Service } from "@prisma/client";
+import { signIn } from "next-auth/react";
 import Image from "next/image";
 
 interface ServiceItemProps {
   service: Service;
+  isAuthenticated: boolean;
 }
 
-const ServiceItem = ({ service }: ServiceItemProps) => {
+const ServiceItem = ({ service, isAuthenticated }: ServiceItemProps) => {
+  const handleBookingClick = () => {
+    if (!isAuthenticated) return signIn("google");
+
+    // TODO: open booking modal
+  };
+
   return (
     <Card>
       <CardContent className="p-3">
@@ -17,7 +27,7 @@ const ServiceItem = ({ service }: ServiceItemProps) => {
               src={service.imageUrl}
               fill
               style={{
-                objectFit: "contain"
+                objectFit: "contain",
               }}
               alt={service.name}
             />
@@ -28,18 +38,15 @@ const ServiceItem = ({ service }: ServiceItemProps) => {
             <p className="text-sm text-gray-400">{service.description}</p>
 
             <div className="flex items-center justify-between mt-3">
-              <p className="font-bold text-sm text-primary">{Intl.NumberFormat(
-                "pt-BR",
-                {
+              <p className="font-bold text-sm text-primary">
+                {Intl.NumberFormat("pt-BR", {
                   style: "currency",
                   currency: "BRL",
-                }
-              ).format(Number(service.price))}</p>
-              <Button variant="secondary">Reservar</Button>
+                }).format(Number(service.price))}
+              </p>
+              <Button variant="secondary" onClick={handleBookingClick}>Reservar</Button>
             </div>
           </div>
-
-
         </div>
       </CardContent>
     </Card>
