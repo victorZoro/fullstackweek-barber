@@ -11,11 +11,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/app/_components/ui/sheet";
-import { Barbershop, Service } from "@prisma/client";
+import { Barbershop, Booking, Service } from "@prisma/client";
 import { ptBR } from "date-fns/locale/pt-BR";
 import { signIn, useSession } from "next-auth/react";
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { generateDayTimeList } from "../_helpers/hours";
 import { format } from "date-fns/format";
 import { saveBooking } from "../_actions/save-booking";
@@ -23,7 +23,7 @@ import { setHours, setMinutes } from "date-fns";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-
+import { getDayBookings } from "../_actions/get-day-bookings";
 
 interface ServiceItemProps {
   barbershop: Barbershop;
@@ -37,23 +37,49 @@ const ServiceItem = ({
   isAuthenticated,
 }: ServiceItemProps) => {
   const router = useRouter();
-  
+
   const { data } = useSession();
 
   const [date, setDate] = useState<Date | undefined>();
   const [schedule, setSchedule] = useState<string | undefined>();
+  const [dayBookings, setDayBookings] = useState<Booking[]>([]);
 
   const [submitIsLoading, setSubmitIsLoading] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
+  useEffect(() => {
+    if (!date) return;
+
+    const refreshAvailableSchedules = async () => {
+      const currentDayBookings = await getDayBookings(barbershop.id, date);
+      setDayBookings(currentDayBookings);
+    };
+
+    refreshAvailableSchedules();
+  }, [date, barbershop.id]);
+
   const timeList = useMemo(() => {
-    return date ? generateDayTimeList(date) : [];
-  }, [date]);
+    if (!date) return [];
+
+    return generateDayTimeList(date).filter((time) => {
+      const targetHours = Number(time.split(":")[0]);
+      const targetMinutes = Number(time.split(":")[1]);
+
+      const findMatchingSchedule = dayBookings.find((booking) => {
+        const bookingHours = booking.date.getHours();
+        const bookingMinutes = booking.date.getMinutes();
+
+        return bookingHours === targetHours && bookingMinutes === targetMinutes;
+      });
+
+      if (!findMatchingSchedule) return true;
+
+      return false;
+    });
+  }, [date, dayBookings]);
 
   const handleBookingClick = () => {
     if (!isAuthenticated) return signIn("google");
-
-    // TODO: open booking modal
   };
 
   const handleDateClick = (date: Date | undefined) => {
@@ -87,27 +113,27 @@ const ServiceItem = ({
       setIsSheetOpen(false);
 
       toast("Reserva realizada com sucesso!", {
-        description: format(scheduledDate, "dd 'de' MMMM 'às' HH:mm", {locale: ptBR}),
+        description: format(scheduledDate, "dd 'de' MMMM 'às' HH:mm", {
+          locale: ptBR,
+        }),
         action: {
           label: "Visualizar",
           onClick: () => router.push("/bookings"),
         },
-      })
+      });
 
       setDateAsUndefined();
-
     } catch (error) {
       console.error(error);
     } finally {
       setSubmitIsLoading(false);
     }
-
   };
 
   const setDateAsUndefined = () => {
     setDate(undefined);
     setSchedule(undefined);
-  }
+  };
 
   return (
     <Card>
@@ -184,7 +210,6 @@ const ServiceItem = ({
                     />
                   </div>
 
-                  {/* Only show schedule if any date is selected */}
                   {date && (
                     <div className="py-6 px-5 flex gap-3 overflow-x-auto [&::-webkit-scrollbar]:hidden border-y border-solid border-secondary">
                       {timeList.map((time) => (
@@ -242,9 +267,11 @@ const ServiceItem = ({
                   <SheetFooter className="px-5">
                     <Button
                       onClick={handleBookingSubmit}
-                      disabled={(!date || !schedule) || submitIsLoading}
+                      disabled={!date || !schedule || submitIsLoading}
                     >
-                    {submitIsLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {submitIsLoading && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
                       Confirmar reserva
                     </Button>
                   </SheetFooter>
